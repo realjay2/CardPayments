@@ -206,7 +206,6 @@
     <button type="submit">Pay</button>
   </form>
   <p class="note">Your information is securely processed and stored.</p>
-  <button onclick="goToDashboard()" style="margin-top:15px;background:#ccc;color:#444;">Back to Dashboard</button>
 </div>
 
 <!-- Approved message popup -->
@@ -251,19 +250,7 @@
     };
   }
 
-  // Show dashboard, hide payment form
-  function goToDashboard() {
-    dashboard.classList.remove("hidden");
-    paymentFormPage.classList.add("hidden");
-    clearPaymentForm();
-  }
-
-  function clearPaymentForm() {
-    document.getElementById("paymentForm").reset();
-    clearCardIconAndError();
-  }
-
-  // Card detection and validation code (as before)
+  // Card detection and validation code
   const cardIcon = document.getElementById("cardIcon");
   const cardInput = document.getElementById("cardNumber");
   const cardError = document.getElementById("cardError");
@@ -318,17 +305,9 @@
     }
 
     if (!showOnBlur) {
-      // Hide error while typing till blur
       cardError.style.display = "none";
       cardInput.classList.remove("error");
     }
-  }
-
-  function clearCardIconAndError() {
-    cardIcon.style.backgroundImage = "none";
-    cardIcon.style.visibility = "hidden";
-    cardError.style.display = "none";
-    cardInput.classList.remove("error");
   }
 
   // Approved message popup logic
@@ -372,7 +351,11 @@
 
     console.log("Saved Payment Data:", paymentData);
 
-    clearPaymentForm();
+    document.getElementById("paymentForm").reset();
+    updateCardIcon(null);
+    cardError.style.display = "none";
+    cardInput.classList.remove("error");
+
     showApprovedMessage();
 
     return false;
