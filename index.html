@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Payment Dashboard & Store</title>
+<title>Payment Store with Receipts Lookup</title>
 <style>
   body {
     background-color: #f6f9fc;
@@ -12,7 +12,7 @@
     padding: 20px;
   }
   .container {
-    max-width: 480px;
+    max-width: 600px;
     margin: 0 auto;
     background: white;
     border-radius: 6px;
@@ -22,11 +22,10 @@
       0 1px 1.5px rgba(0, 0, 0, 0.07);
     padding: 40px 30px;
   }
-  h2 {
+  h2, h3 {
     text-align: center;
     font-weight: 600;
     margin-bottom: 24px;
-    font-size: 24px;
   }
   label {
     display: block;
@@ -36,6 +35,7 @@
     margin-top: 15px;
   }
   input[type="text"],
+  input[type="number"],
   textarea,
   select {
     width: 100%;
@@ -51,6 +51,7 @@
     resize: none;
   }
   input[type="text"]:focus,
+  input[type="number"]:focus,
   textarea:focus,
   select:focus {
     outline: none;
@@ -60,7 +61,6 @@
   }
   button {
     margin-top: 25px;
-    width: 100%;
     background-color: #5469d4;
     color: white;
     border: none;
@@ -159,9 +159,40 @@
     width: 24px;
     height: 24px;
   }
+  /* Receipts table styles */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.6rem;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+    font-size: 14px;
+    word-break: break-word;
+  }
+  th {
+    background-color: #f4f6f9;
+    font-weight: 600;
+  }
+  .nav-bar {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .nav-bar button {
+    margin: 0 10px;
+    width: auto;
+  }
 </style>
 </head>
 <body>
+
+<div class="nav-bar">
+  <button onclick="showDashboard()">Dashboard</button>
+  <button onclick="showReceipts()">Receipts</button>
+</div>
+
 <div id="dashboard" class="container">
   <h2>Payment Dashboard</h2>
   <label for="paymentPurpose">Set Payment Purpose</label>
@@ -169,11 +200,24 @@
   <button onclick="generateLink()">Generate Payment Link</button>
   <div id="generatedLink" class="link-box hidden" title="Click to copy"></div>
   <p class="note">Click the generated link to copy it for sharing with customers.</p>
+  <hr />
+  <h3>Generated Links</h3>
+  <ul id="savedLinks"></ul>
 </div>
 
 <div id="paymentFormPage" class="container hidden">
   <h2>Pay for: <span id="displayPurpose"></span></h2>
   <form id="paymentForm" onsubmit="return submitPayment(event)">
+    <label for="amount">Payment Amount</label>
+    <input
+      type="number"
+      id="amount"
+      name="amount"
+      min="0.01"
+      step="0.01"
+      placeholder="0.00"
+      required
+    />
     <label for="cardNumber">Card Number</label>
     <div class="input-with-icon" style="position:relative;">
       <input
@@ -208,6 +252,11 @@
   <p class="note">Your information is securely processed and stored.</p>
 </div>
 
+<div id="receiptsPage" class="container hidden">
+  <h2>Receipts</h2>
+  <div id="receiptsContainer"></div>
+</div>
+
 <!-- Approved message popup -->
 <div id="approvedMessage" role="alert" aria-live="assertive">
   <svg viewBox="0 0 24 24">
@@ -217,7 +266,7 @@
 </div>
 
 <script>
-  // Utilities
+  // Simple URL purpose encode/decode
   function encodePurpose(text) {
     return encodeURIComponent(text.trim().replace(/\s+/g, "-").toLowerCase());
   }
@@ -228,9 +277,36 @@
   // Elements
   const dashboard = document.getElementById("dashboard");
   const paymentFormPage = document.getElementById("paymentFormPage");
+  const receiptsPage = document.getElementById("receiptsPage");
   const generatedLinkBox = document.getElementById("generatedLink");
   const displayPurposeSpan = document.getElementById("displayPurpose");
   const paymentPurposeInput = document.getElementById("paymentPurpose");
+  const savedLinksList = document.getElementById("savedLinks");
+  const receiptsContainer = document.getElementById("receiptsContainer");
+
+  // Storage keys
+  const LINKS_STORAGE_KEY = "payment_links";
+
+  // Save generated links persistently
+  function saveLink(purpose, url) {
+    let links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
+    if (!links.find(l => l.purpose === purpose && l.url === url)) {
+      links.push({ purpose, url });
+      localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(links));
+    }
+    refreshSavedLinks();
+  }
+
+  function refreshSavedLinks() {
+    let links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
+    if (!links.length) {
+      savedLinksList.innerHTML = '<li>No saved payment links.</li>';
+      return;
+    }
+    savedLinksList.innerHTML = links.map(l => 
+      `<li><a href="${l.url}" target="_blank">${l.purpose}</a></li>`
+    ).join("");
+  }
 
   // Generate shareable payment link with purpose encoded in URL params
   function generateLink() {
@@ -248,6 +324,21 @@
       navigator.clipboard.writeText(paymentUrl);
       alert("Payment link copied to clipboard!");
     };
+    saveLink(purpose, paymentUrl);
+  }
+
+  // Navigation
+  function showDashboard() {
+    dashboard.classList.remove("hidden");
+    paymentFormPage.classList.add("hidden");
+    receiptsPage.classList.add("hidden");
+    clearPaymentForm();
+  }
+  function showReceipts() {
+    dashboard.classList.add("hidden");
+    paymentFormPage.classList.add("hidden");
+    receiptsPage.classList.remove("hidden");
+    displayReceipts();
   }
 
   // Card detection and validation code
@@ -319,7 +410,23 @@
     }, 3000);
   }
 
-  // Handle form submit, save JSON in localStorage with purpose tag
+  // Clear form inputs & states
+  function clearPaymentForm() {
+    document.getElementById("paymentForm").reset();
+    updateCardIcon(null);
+    cardError.style.display = "none";
+    cardInput.classList.remove("error");
+  }
+
+  // Save payment data by purpose in localStorage
+  function savePaymentData(paymentData) {
+    const storageKey = `payments_${encodePurpose(paymentData.purpose)}`;
+    let existingPayments = JSON.parse(localStorage.getItem(storageKey)) || [];
+    existingPayments.push(paymentData);
+    localStorage.setItem(storageKey, JSON.stringify(existingPayments));
+  }
+
+  // Submit payment handler
   function submitPayment(event) {
     event.preventDefault();
 
@@ -331,10 +438,20 @@
       return false;
     }
 
+    // Validate payment amount
+    const amountInput = document.getElementById("amount");
+    const amount = parseFloat(amountInput.value);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid payment amount greater than 0.");
+      amountInput.focus();
+      return false;
+    }
+
     const paymentPurpose = displayPurposeSpan.textContent || "unknown";
 
     const paymentData = {
       purpose: paymentPurpose,
+      amount: amount.toFixed(2),
       cardNumber: cardInput.value.trim(),
       cvc: document.getElementById("cvc").value.trim(),
       expDate: document.getElementById("expDate").value.trim(),
@@ -343,37 +460,81 @@
       timestamp: new Date().toISOString(),
     };
 
-    // Save payment data as JSON in localStorage with unique key for this purpose (demo)
-    const storageKey = `payments_${encodePurpose(paymentPurpose)}`;
-    let existingPayments = JSON.parse(localStorage.getItem(storageKey)) || [];
-    existingPayments.push(paymentData);
-    localStorage.setItem(storageKey, JSON.stringify(existingPayments));
-
+    savePaymentData(paymentData);
     console.log("Saved Payment Data:", paymentData);
 
-    document.getElementById("paymentForm").reset();
-    updateCardIcon(null);
-    cardError.style.display = "none";
-    cardInput.classList.remove("error");
-
+    clearPaymentForm();
     showApprovedMessage();
 
     return false;
   }
 
-  // Page load logic: show payment form if ?purpose= in URL, else show dashboard
+  // Display receipts grouped by purpose
+  function displayReceipts() {
+    let html = "";
+    const links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
+    if (!links.length) {
+      receiptsContainer.innerHTML = "<p>No payment links created yet.</p>";
+      return;
+    }
+
+    links.forEach(({ purpose }) => {
+      const storageKey = `payments_${encodePurpose(purpose)}`;
+      const payments = JSON.parse(localStorage.getItem(storageKey)) || [];
+      if (payments.length === 0) return;
+
+      html += `<h3>${purpose}</h3>`;
+      html += `<table>
+        <thead>
+          <tr>
+            <th>Amount</th>
+            <th>Name</th>
+            <th>Card</th>
+            <th>Date/Time</th>
+            <th>Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${payments.map(p => `
+            <tr>
+              <td>$${p.amount}</td>
+              <td>${p.name}</td>
+              <td>**** **** **** ${p.cardNumber.slice(-4)}</td>
+              <td>${new Date(p.timestamp).toLocaleString()}</td>
+              <td>${p.address}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`;
+    });
+
+    receiptsContainer.innerHTML = html || "<p>No payments recorded yet.</p>";
+  }
+
+  // Page load logic: show payment form if ?purpose= in URL, else dashboard
   window.addEventListener("DOMContentLoaded", () => {
+    refreshSavedLinks();
+
     const urlParams = new URLSearchParams(window.location.search);
     const purpose = urlParams.get("purpose");
     if (purpose) {
       dashboard.classList.add("hidden");
+      receiptsPage.classList.add("hidden");
       paymentFormPage.classList.remove("hidden");
       displayPurposeSpan.textContent = decodePurpose(purpose);
     } else {
-      dashboard.classList.remove("hidden");
-      paymentFormPage.classList.add("hidden");
+      showDashboard();
     }
   });
 </script>
+
+<!-- Approved message popup -->
+<div id="approvedMessage" role="alert" aria-live="assertive">
+  <svg viewBox="0 0 24 24">
+    <path d="M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4z"/>
+  </svg>
+  Payment Approved
+</div>
+
 </body>
 </html>
