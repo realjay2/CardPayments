@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Payment Dashboard & Store</title>
+<style>
+  body {
+    background-color: #f6f9fc;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #32325d;
+    margin: 0;
+    padding: 20px;
+  }
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 6px;
+    box-shadow:
+      0 0 20px rgba(50, 50, 93, 0.1),
+      0 2px 5px rgba(50, 50, 93, 0.1),
+      0 1px 1.5px rgba(0, 0, 0, 0.07);
+    padding: 40px 30px;
+  }
+  h2 {
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 24px;
+    font-size: 24px;
+  }
+  label {
+    display: block;
+    font-size: 14px;
+    color: #6b7c93;
+    margin-bottom: 6px;
+    margin-top: 15px;
+  }
+  input[type="text"],
+  textarea,
+  select {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px;
+    border-radius: 4px;
+    border: 1px solid #ccd0d5;
+    background: #fafafa;
+    color: #32325d;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    resize: none;
+  }
+  input[type="text"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: #5469d4;
+    background: white;
+    box-shadow: 0 0 0 1px #5469d4;
+  }
+  button {
+    margin-top: 25px;
+    width: 100%;
+    background-color: #5469d4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  button:hover {
+    background-color: #4253b2;
+  }
+  .note {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 12px;
+    color: #8898aa;
+  }
+  .link-box {
+    padding: 10px;
+    background: #f1f3f5;
+    border-radius: 4px;
+    margin-top: 15px;
+    font-size: 14px;
+    word-break: break-all;
+    cursor: pointer;
+  }
+  .hidden {
+    display: none;
+  }
+  .input-with-icon {
+    position: relative;
+    width: 100%;
+  }
+  .card-icon {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    transform: translateY(-50%);
+    height: 24px;
+    width: 36px;
+    pointer-events: none;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    filter: grayscale(100%);
+    transition: filter 0.3s ease;
+  }
+  input[type="text"]:focus + .card-icon {
+    filter: grayscale(0%);
+  }
+  .error {
+    border-color: #fa755a !important;
+    background: #fff5f5;
+  }
+  .error-message {
+    color: #fa755a;
+    font-size: 13px;
+    position: absolute;
+    top: 42px;
+    right: 50px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* Approved message styles */
+  #approvedMessage {
+    position: fixed;
+    bottom: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #28a745;
+    color: white;
+    padding: 16px 30px;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 0 15px rgba(40, 167, 69, 0.7);
+    opacity: 0;
+    pointer-events: none;
+    transition: bottom 0.5s ease, opacity 0.5s ease;
+    z-index: 1000;
+  }
+  #approvedMessage.show {
+    bottom: 30px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #approvedMessage svg {
+    margin-right: 12px;
+    fill: white;
+    width: 24px;
+    height: 24px;
+  }
+</style>
+</head>
+<body>
+<div id="dashboard" class="container">
+  <h2>Payment Dashboard</h2>
+  <label for="paymentPurpose">Set Payment Purpose</label>
+  <input type="text" id="paymentPurpose" placeholder="E.g. Consulting Fee, Product X" required />
+  <button onclick="generateLink()">Generate Payment Link</button>
+  <div id="generatedLink" class="link-box hidden" title="Click to copy"></div>
+  <p class="note">Click the generated link to copy it for sharing with customers.</p>
+</div>
+
+<div id="paymentFormPage" class="container hidden">
+  <h2>Pay for: <span id="displayPurpose"></span></h2>
+  <form id="paymentForm" onsubmit="return submitPayment(event)">
+    <label for="cardNumber">Card Number</label>
+    <div class="input-with-icon" style="position:relative;">
+      <input
+        type="text"
+        id="cardNumber"
+        name="cardNumber"
+        maxlength="19"
+        placeholder="1234 5678 9012 3456"
+        autocomplete="cc-number"
+        required
+        oninput="validateCardInput()"
+        onblur="validateCardInput(true)"
+      />
+      <div id="cardIcon" class="card-icon"></div>
+      <div id="cardError" class="error-message" style="display:none;">Unrecognized card type</div>
+    </div>
+
+    <label for="cvc">CVC</label>
+    <input type="text" id="cvc" name="cvc" maxlength="4" placeholder="123" autocomplete="cc-csc" required />
+
+    <label for="expDate">Expiration Date (MM/YY)</label>
+    <input type="text" id="expDate" name="expDate" maxlength="5" placeholder="08/25" autocomplete="cc-exp" required />
+
+    <label for="name">Name on Card</label>
+    <input type="text" id="name" name="name" placeholder="Jane Doe" autocomplete="cc-name" required />
+
+    <label for="address">Billing Address</label>
+    <textarea id="address" name="address" placeholder="123 Main Street, Apt 4" required></textarea>
+
+    <button type="submit">Pay</button>
+  </form>
+  <p class="note">Your information is securely processed and stored.</p>
+  <button onclick="goToDashboard()" style="margin-top:15px;background:#ccc;color:#444;">Back to Dashboard</button>
+</div>
+
+<!-- Approved message popup -->
+<div id="approvedMessage" role="alert" aria-live="assertive">
+  <svg viewBox="0 0 24 24">
+    <path d="M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4z"/>
+  </svg>
+  Payment Approved
+</div>
+
+<script>
+  // Utilities
+  function encodePurpose(text) {
+    return encodeURIComponent(text.trim().replace(/\s+/g, "-").toLowerCase());
+  }
+  function decodePurpose(text) {
+    return decodeURIComponent(text).replace(/-/g, " ");
+  }
+
+  // Elements
+  const dashboard = document.getElementById("dashboard");
+  const paymentFormPage = document.getElementById("paymentFormPage");
+  const generatedLinkBox = document.getElementById("generatedLink");
+  const displayPurposeSpan = document.getElementById("displayPurpose");
+  const paymentPurposeInput = document.getElementById("paymentPurpose");
+
+  // Generate shareable payment link with purpose encoded in URL params
+  function generateLink() {
+    const purpose = paymentPurposeInput.value.trim();
+    if (!purpose) {
+      alert("Please enter a payment purpose.");
+      return;
+    }
+    const encodedPurpose = encodePurpose(purpose);
+    const baseUrl = window.location.origin + window.location.pathname;
+    const paymentUrl = `${baseUrl}?purpose=${encodedPurpose}`;
+    generatedLinkBox.textContent = paymentUrl;
+    generatedLinkBox.classList.remove("hidden");
+    generatedLinkBox.onclick = () => {
+      navigator.clipboard.writeText(paymentUrl);
+      alert("Payment link copied to clipboard!");
+    };
+  }
+
+  // Show dashboard, hide payment form
+  function goToDashboard() {
+    dashboard.classList.remove("hidden");
+    paymentFormPage.classList.add("hidden");
+    clearPaymentForm();
+  }
+
+  function clearPaymentForm() {
+    document.getElementById("paymentForm").reset();
+    clearCardIconAndError();
+  }
+
+  // Card detection and validation code (as before)
+  const cardIcon = document.getElementById("cardIcon");
+  const cardInput = document.getElementById("cardNumber");
+  const cardError = document.getElementById("cardError");
+
+  const cardTypes = {
+    visa: /^4/,
+    mastercard: /^(5[1-5]|2[2-7])/,
+    amex: /^3[47]/,
+    discover: /^(6011|65|64[4-9]|622)/,
+    diners: /^3(0[0-5]|)/,
+    jcb: /^35(2|[3-8])/,
+  };
+
+  function getCardType(number) {
+    for (const [type, pattern] of Object.entries(cardTypes)) {
+      if (pattern.test(number)) {
+        return type;
+      }
+    }
+    return null;
+  }
+
+  function updateCardIcon(type) {
+    if (!type) {
+      cardIcon.style.backgroundImage = "none";
+      cardIcon.style.visibility = "hidden";
+      return;
+    }
+    const logos = {
+      visa: "https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png",
+      mastercard: "https://upload.wikimedia.org/wikipedia/commons/0/04/Mastercard-logo.png",
+      amex: "https://upload.wikimedia.org/wikipedia/commons/3/30/American_Express_logo_%282018%29.svg",
+      discover: "https://upload.wikimedia.org/wikipedia/commons/5/5a/Discover_Card_logo.svg",
+      diners: "https://upload.wikimedia.org/wikipedia/commons/1/16/Diners_Club_Logo3.svg",
+      jcb: "https://upload.wikimedia.org/wikipedia/commons/5/50/JCB_logo.svg",
+    };
+    cardIcon.style.backgroundImage = `url(${logos[type] || ""})`;
+    cardIcon.style.visibility = "visible";
+  }
+
+  function validateCardInput(showOnBlur = false) {
+    const number = cardInput.value.replace(/\s/g, "");
+    const cardType = getCardType(number);
+    updateCardIcon(cardType);
+
+    if (!cardType && number.length > 0) {
+      cardError.style.display = "block";
+      cardInput.classList.add("error");
+    } else {
+      cardError.style.display = "none";
+      cardInput.classList.remove("error");
+    }
+
+    if (!showOnBlur) {
+      // Hide error while typing till blur
+      cardError.style.display = "none";
+      cardInput.classList.remove("error");
+    }
+  }
+
+  function clearCardIconAndError() {
+    cardIcon.style.backgroundImage = "none";
+    cardIcon.style.visibility = "hidden";
+    cardError.style.display = "none";
+    cardInput.classList.remove("error");
+  }
+
+  // Approved message popup logic
+  const approvedMessage = document.getElementById("approvedMessage");
+  function showApprovedMessage() {
+    approvedMessage.classList.add("show");
+    setTimeout(() => {
+      approvedMessage.classList.remove("show");
+    }, 3000);
+  }
+
+  // Handle form submit, save JSON in localStorage with purpose tag
+  function submitPayment(event) {
+    event.preventDefault();
+
+    const number = cardInput.value.replace(/\s/g, "");
+    const cardType = getCardType(number);
+    if (!cardType) {
+      alert("Please enter a valid or registered card type.");
+      cardInput.focus();
+      return false;
+    }
+
+    const paymentPurpose = displayPurposeSpan.textContent || "unknown";
+
+    const paymentData = {
+      purpose: paymentPurpose,
+      cardNumber: cardInput.value.trim(),
+      cvc: document.getElementById("cvc").value.trim(),
+      expDate: document.getElementById("expDate").value.trim(),
+      name: document.getElementById("name").value.trim(),
+      address: document.getElementById("address").value.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    // Save payment data as JSON in localStorage with unique key for this purpose (demo)
+    const storageKey = `payments_${encodePurpose(paymentPurpose)}`;
+    let existingPayments = JSON.parse(localStorage.getItem(storageKey)) || [];
+    existingPayments.push(paymentData);
+    localStorage.setItem(storageKey, JSON.stringify(existingPayments));
+
+    console.log("Saved Payment Data:", paymentData);
+
+    clearPaymentForm();
+    showApprovedMessage();
+
+    return false;
+  }
+
+  // Page load logic: show payment form if ?purpose= in URL, else show dashboard
+  window.addEventListener("DOMContentLoaded", () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const purpose = urlParams.get("purpose");
+    if (purpose) {
+      dashboard.classList.add("hidden");
+      paymentFormPage.classList.remove("hidden");
+      displayPurposeSpan.textContent = decodePurpose(purpose);
+    } else {
+      dashboard.classList.remove("hidden");
+      paymentFormPage.classList.add("hidden");
+    }
+  });
+</script>
+</body>
+</html>
