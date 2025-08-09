@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Payment Store with Receipts Lookup</title>
 <style>
   body {
@@ -36,8 +37,7 @@
   }
   input[type="text"],
   input[type="number"],
-  textarea,
-  select {
+  textarea {
     width: 100%;
     padding: 12px 14px;
     font-size: 16px;
@@ -52,8 +52,7 @@
   }
   input[type="text"]:focus,
   input[type="number"]:focus,
-  textarea:focus,
-  select:focus {
+  textarea:focus {
     outline: none;
     border-color: #5469d4;
     background: white;
@@ -80,54 +79,9 @@
     font-size: 12px;
     color: #8898aa;
   }
-  .link-box {
-    padding: 10px;
-    background: #f1f3f5;
-    border-radius: 4px;
-    margin-top: 15px;
-    font-size: 14px;
-    word-break: break-all;
-    cursor: pointer;
-  }
   .hidden {
     display: none;
   }
-  .input-with-icon {
-    position: relative;
-    width: 100%;
-  }
-  .card-icon {
-    position: absolute;
-    top: 50%;
-    right: 14px;
-    transform: translateY(-50%);
-    height: 24px;
-    width: 36px;
-    pointer-events: none;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    filter: grayscale(100%);
-    transition: filter 0.3s ease;
-  }
-  input[type="text"]:focus + .card-icon {
-    filter: grayscale(0%);
-  }
-  .error {
-    border-color: #fa755a !important;
-    background: #fff5f5;
-  }
-  .error-message {
-    color: #fa755a;
-    font-size: 13px;
-    position: absolute;
-    top: 42px;
-    right: 50px;
-    font-weight: 600;
-    white-space: nowrap;
-    pointer-events: none;
-  }
-
   /* Approved message styles */
   #approvedMessage {
     position: fixed;
@@ -159,7 +113,6 @@
     width: 24px;
     height: 24px;
   }
-  /* Receipts table styles */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -189,25 +142,28 @@
 <body>
 
 <div class="nav-bar">
-  <button onclick="showDashboard()">Dashboard</button>
-  <button onclick="showReceipts()">Receipts</button>
+  <button id="navDashboard" class="active">Dashboard</button>
+  <button id="navReceipts">Receipts</button>
 </div>
 
 <div id="dashboard" class="container">
   <h2>Payment Dashboard</h2>
   <label for="paymentPurpose">Set Payment Purpose</label>
   <input type="text" id="paymentPurpose" placeholder="E.g. Consulting Fee, Product X" required />
-  <button onclick="generateLink()">Generate Payment Link</button>
+  <button id="generateLinkBtn">Generate Payment Link</button>
   <div id="generatedLink" class="link-box hidden" title="Click to copy"></div>
   <p class="note">Click the generated link to copy it for sharing with customers.</p>
   <hr />
-  <h3>Generated Links</h3>
+  <h3>Saved Payment Links</h3>
   <ul id="savedLinks"></ul>
 </div>
 
 <div id="paymentFormPage" class="container hidden">
-  <h2>Pay for: <span id="displayPurpose"></span></h2>
-  <form id="paymentForm" onsubmit="return submitPayment(event)">
+  <h2>Make a Payment</h2>
+  <form id="paymentForm" novalidate>
+    <label for="formPurpose">Payment Purpose</label>
+    <input type="text" id="formPurpose" name="formPurpose" placeholder="Payment Purpose" readonly />
+
     <label for="amount">Payment Amount</label>
     <input
       type="number"
@@ -219,322 +175,279 @@
       required
     />
     <label for="cardNumber">Card Number</label>
-    <div class="input-with-icon" style="position:relative;">
-      <input
-        type="text"
-        id="cardNumber"
-        name="cardNumber"
-        maxlength="19"
-        placeholder="1234 5678 9012 3456"
-        autocomplete="cc-number"
-        required
-        oninput="validateCardInput()"
-        onblur="validateCardInput(true)"
-      />
-      <div id="cardIcon" class="card-icon"></div>
-      <div id="cardError" class="error-message" style="display:none;">Unrecognized card type</div>
-    </div>
-
+    <input
+      type="text"
+      id="cardNumber"
+      name="cardNumber"
+      maxlength="19"
+      placeholder="1234 5678 9012 3456"
+      required
+      autocomplete="cc-number"
+    />
     <label for="cvc">CVC</label>
-    <input type="text" id="cvc" name="cvc" maxlength="4" placeholder="123" autocomplete="cc-csc" required />
+    <input type="text" id="cvc" name="cvc" maxlength="4" placeholder="123" required autocomplete="cc-csc" />
 
     <label for="expDate">Expiration Date (MM/YY)</label>
-    <input type="text" id="expDate" name="expDate" maxlength="5" placeholder="08/25" autocomplete="cc-exp" required />
+    <input type="text" id="expDate" name="expDate" maxlength="5" placeholder="08/25" required autocomplete="cc-exp" />
 
     <label for="name">Name on Card</label>
-    <input type="text" id="name" name="name" placeholder="Jane Doe" autocomplete="cc-name" required />
+    <input type="text" id="name" name="name" placeholder="Jane Doe" required autocomplete="cc-name" />
 
     <label for="address">Billing Address</label>
     <textarea id="address" name="address" placeholder="123 Main Street, Apt 4" required></textarea>
 
     <button type="submit">Pay</button>
   </form>
-  <p class="note">Your information is securely processed and stored.</p>
 </div>
 
 <div id="receiptsPage" class="container hidden">
   <h2>Receipts</h2>
-  <div id="receiptsContainer"></div>
+  <div id="receiptsContainer"><p>Loading receipts...</p></div>
 </div>
 
-<!-- Approved message popup -->
+<!-- Approved message -->
 <div id="approvedMessage" role="alert" aria-live="assertive">
   <svg viewBox="0 0 24 24">
     <path d="M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4z"/>
-  </svg>
-  Payment Approved
+  </svg> Payment Approved
 </div>
 
 <script>
-  // Simple URL purpose encode/decode
-  function encodePurpose(text) {
-    return encodeURIComponent(text.trim().replace(/\s+/g, "-").toLowerCase());
-  }
-  function decodePurpose(text) {
-    return decodeURIComponent(text).replace(/-/g, " ");
-  }
-
   // Elements
-  const dashboard = document.getElementById("dashboard");
-  const paymentFormPage = document.getElementById("paymentFormPage");
-  const receiptsPage = document.getElementById("receiptsPage");
-  const generatedLinkBox = document.getElementById("generatedLink");
-  const displayPurposeSpan = document.getElementById("displayPurpose");
-  const paymentPurposeInput = document.getElementById("paymentPurpose");
-  const savedLinksList = document.getElementById("savedLinks");
-  const receiptsContainer = document.getElementById("receiptsContainer");
+  const navDashboard = document.getElementById('navDashboard');
+  const navReceipts = document.getElementById('navReceipts');
+  const dashboard = document.getElementById('dashboard');
+  const paymentFormPage = document.getElementById('paymentFormPage');
+  const receiptsPage = document.getElementById('receiptsPage');
+  const generateLinkBtn = document.getElementById('generateLinkBtn');
+  const savedLinks = document.getElementById('savedLinks');
+  const generatedLink = document.getElementById('generatedLink');
+  const paymentPurposeInput = document.getElementById('paymentPurpose');
+  const formPurposeInput = document.getElementById('formPurpose');
+  const paymentForm = document.getElementById('paymentForm');
+  const receiptsContainer = document.getElementById('receiptsContainer');
+  const approvedMessage = document.getElementById('approvedMessage');
 
   // Storage keys
-  const LINKS_STORAGE_KEY = "payment_links";
-
-  // Save generated links persistently
-  function saveLink(purpose, url) {
-    let links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
-    if (!links.find(l => l.purpose === purpose && l.url === url)) {
-      links.push({ purpose, url });
-      localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(links));
-    }
-    refreshSavedLinks();
-  }
-
-  function refreshSavedLinks() {
-    let links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
-    if (!links.length) {
-      savedLinksList.innerHTML = '<li>No saved payment links.</li>';
-      return;
-    }
-    savedLinksList.innerHTML = links.map(l => 
-      `<li><a href="${l.url}" target="_blank">${l.purpose}</a></li>`
-    ).join("");
-  }
-
-  // Generate shareable payment link with purpose encoded in URL params
-  function generateLink() {
-    const purpose = paymentPurposeInput.value.trim();
-    if (!purpose) {
-      alert("Please enter a payment purpose.");
-      return;
-    }
-    const encodedPurpose = encodePurpose(purpose);
-    const baseUrl = window.location.origin + window.location.pathname;
-    const paymentUrl = `${baseUrl}?purpose=${encodedPurpose}`;
-    generatedLinkBox.textContent = paymentUrl;
-    generatedLinkBox.classList.remove("hidden");
-    generatedLinkBox.onclick = () => {
-      navigator.clipboard.writeText(paymentUrl);
-      alert("Payment link copied to clipboard!");
-    };
-    saveLink(purpose, paymentUrl);
-  }
+  const LINKS_STORAGE_KEY = 'payment_links';
 
   // Navigation
-  function showDashboard() {
-    dashboard.classList.remove("hidden");
-    paymentFormPage.classList.add("hidden");
-    receiptsPage.classList.add("hidden");
-    clearPaymentForm();
-  }
-  function showReceipts() {
-    dashboard.classList.add("hidden");
-    paymentFormPage.classList.add("hidden");
-    receiptsPage.classList.remove("hidden");
-    displayReceipts();
-  }
-
-  // Card detection and validation code
-  const cardIcon = document.getElementById("cardIcon");
-  const cardInput = document.getElementById("cardNumber");
-  const cardError = document.getElementById("cardError");
-
-  const cardTypes = {
-    visa: /^4/,
-    mastercard: /^(5[1-5]|2[2-7])/,
-    amex: /^3[47]/,
-    discover: /^(6011|65|64[4-9]|622)/,
-    diners: /^3(0[0-5]|)/,
-    jcb: /^35(2|[3-8])/,
-  };
-
-  function getCardType(number) {
-    for (const [type, pattern] of Object.entries(cardTypes)) {
-      if (pattern.test(number)) {
-        return type;
-      }
-    }
-    return null;
-  }
-
-  function updateCardIcon(type) {
-    if (!type) {
-      cardIcon.style.backgroundImage = "none";
-      cardIcon.style.visibility = "hidden";
-      return;
-    }
-    const logos = {
-      visa: "https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png",
-      mastercard: "https://upload.wikimedia.org/wikipedia/commons/0/04/Mastercard-logo.png",
-      amex: "https://upload.wikimedia.org/wikipedia/commons/3/30/American_Express_logo_%282018%29.svg",
-      discover: "https://upload.wikimedia.org/wikipedia/commons/5/5a/Discover_Card_logo.svg",
-      diners: "https://upload.wikimedia.org/wikipedia/commons/1/16/Diners_Club_Logo3.svg",
-      jcb: "https://upload.wikimedia.org/wikipedia/commons/5/50/JCB_logo.svg",
-    };
-    cardIcon.style.backgroundImage = `url(${logos[type] || ""})`;
-    cardIcon.style.visibility = "visible";
-  }
-
-  function validateCardInput(showOnBlur = false) {
-    const number = cardInput.value.replace(/\s/g, "");
-    const cardType = getCardType(number);
-    updateCardIcon(cardType);
-
-    if (!cardType && number.length > 0) {
-      cardError.style.display = "block";
-      cardInput.classList.add("error");
-    } else {
-      cardError.style.display = "none";
-      cardInput.classList.remove("error");
-    }
-
-    if (!showOnBlur) {
-      cardError.style.display = "none";
-      cardInput.classList.remove("error");
+  function setActiveNav(active) {
+    if (active === 'dashboard') {
+      dashboard.classList.remove('hidden');
+      paymentFormPage.classList.add('hidden');
+      receiptsPage.classList.add('hidden');
+      navDashboard.classList.add('active');
+      navReceipts.classList.remove('active');
+    } else if (active === 'receipts') {
+      dashboard.classList.add('hidden');
+      paymentFormPage.classList.add('hidden');
+      receiptsPage.classList.remove('hidden');
+      navDashboard.classList.remove('active');
+      navReceipts.classList.add('active');
+      loadReceipts();
+    } else if (active === 'payment') {
+      dashboard.classList.add('hidden');
+      paymentFormPage.classList.remove('hidden');
+      receiptsPage.classList.add('hidden');
+      navDashboard.classList.remove('active');
+      navReceipts.classList.remove('active');
     }
   }
 
-  // Approved message popup logic
-  const approvedMessage = document.getElementById("approvedMessage");
-  function showApprovedMessage() {
-    approvedMessage.classList.add("show");
-    setTimeout(() => {
-      approvedMessage.classList.remove("show");
-    }, 3000);
+  navDashboard.addEventListener('click', () => setActiveNav('dashboard'));
+  navReceipts.addEventListener('click', () => setActiveNav('receipts'));
+
+  // URL safe encode/decode utility (for purpose)
+  function encodePurpose(str) {
+    return encodeURIComponent(str.trim().toLowerCase().replace(/\s+/g, '-'));
+  }
+  function decodePurpose(str) {
+    return decodeURIComponent(str).replace(/-/g, ' ');
   }
 
-  // Clear form inputs & states
-  function clearPaymentForm() {
-    document.getElementById("paymentForm").reset();
-    updateCardIcon(null);
-    cardError.style.display = "none";
-    cardInput.classList.remove("error");
-  }
-
-  // Save payment data by purpose in localStorage
-  function savePaymentData(paymentData) {
-    const storageKey = `payments_${encodePurpose(paymentData.purpose)}`;
-    let existingPayments = JSON.parse(localStorage.getItem(storageKey)) || [];
-    existingPayments.push(paymentData);
-    localStorage.setItem(storageKey, JSON.stringify(existingPayments));
-  }
-
-  // Submit payment handler
-  function submitPayment(event) {
-    event.preventDefault();
-
-    const number = cardInput.value.replace(/\s/g, "");
-    const cardType = getCardType(number);
-    if (!cardType) {
-      alert("Please enter a valid or registered card type.");
-      cardInput.focus();
-      return false;
+  // Manage saved links in localStorage
+  function saveLink(purpose, url) {
+    let links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
+    if (!links.some(l => l.purpose === purpose)) {
+      links.push({ purpose, url });
+      localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(links));
+      refreshLinksList();
     }
-
-    // Validate payment amount
-    const amountInput = document.getElementById("amount");
-    const amount = parseFloat(amountInput.value);
-    if (isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid payment amount greater than 0.");
-      amountInput.focus();
-      return false;
-    }
-
-    const paymentPurpose = displayPurposeSpan.textContent || "unknown";
-
-    const paymentData = {
-      purpose: paymentPurpose,
-      amount: amount.toFixed(2),
-      cardNumber: cardInput.value.trim(),
-      cvc: document.getElementById("cvc").value.trim(),
-      expDate: document.getElementById("expDate").value.trim(),
-      name: document.getElementById("name").value.trim(),
-      address: document.getElementById("address").value.trim(),
-      timestamp: new Date().toISOString(),
-    };
-
-    savePaymentData(paymentData);
-    console.log("Saved Payment Data:", paymentData);
-
-    clearPaymentForm();
-    showApprovedMessage();
-
-    return false;
   }
 
-  // Display receipts grouped by purpose
-  function displayReceipts() {
-    let html = "";
+  function refreshLinksList() {
     const links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
-    if (!links.length) {
-      receiptsContainer.innerHTML = "<p>No payment links created yet.</p>";
+    if (links.length === 0) {
+      savedLinks.innerHTML = '<li>No saved payment links</li>';
+    } else {
+      savedLinks.innerHTML = links.map(l => `<li><a href="${l.url}" target="_blank">${l.purpose}</a></li>`).join('');
+    }
+  }
+
+  generateLinkBtn.addEventListener('click', () => {
+    const purpose = paymentPurposeInput.value.trim();
+    if (!purpose) {
+      alert('Enter a payment purpose');
       return;
     }
+    const baseURL = window.location.origin + window.location.pathname;
+    const purposeEncoded = encodePurpose(purpose);
+    const url = `${baseURL}?purpose=${purposeEncoded}`;
+    generatedLink.textContent = url;
+    generatedLink.classList.remove('hidden');
+    generatedLink.onclick = () => {
+      navigator.clipboard.writeText(url);
+      alert('Link copied to clipboard!');
+    };
+    saveLink(purpose, url);
+  });
 
+  // Parse URL params to auto-open payment form with purpose
+  function urlParam(key) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(key);
+  }
+
+  // Save payments under key `payments_${purpose}`
+  function savePayment(payment) {
+    const key = 'payments_' + encodePurpose(payment.purpose);
+    let payments = JSON.parse(localStorage.getItem(key)) || [];
+    payments.push(payment);
+    localStorage.setItem(key, JSON.stringify(payments));
+  }
+
+  // Load payments grouped by saved links (purposes)
+  function loadReceipts() {
+    receiptsContainer.innerHTML = '';
+    const links = JSON.parse(localStorage.getItem(LINKS_STORAGE_KEY)) || [];
+    if (links.length === 0) {
+      receiptsContainer.innerHTML = '<p>No receipts to show</p>';
+      return;
+    }
     links.forEach(({ purpose }) => {
-      const storageKey = `payments_${encodePurpose(purpose)}`;
-      const payments = JSON.parse(localStorage.getItem(storageKey)) || [];
-      if (payments.length === 0) return;
+      const key = 'payments_' + encodePurpose(purpose);
+      const payments = JSON.parse(localStorage.getItem(key)) || [];
+      if (payments.length === 0) return; // skip if no payments
 
-      html += `<h3>${purpose}</h3>`;
-      html += `<table>
-        <thead>
-          <tr>
-            <th>Amount</th>
-            <th>Name</th>
-            <th>Card</th>
-            <th>Date/Time</th>
-            <th>Address</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${payments.map(p => `
+      let html = `<h3>${purpose}</h3>
+        <table>
+          <thead>
             <tr>
+              <th>Amount</th>
+              <th>Name</th>
+              <th>Card (last4)</th>
+              <th>Date/Time</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${payments.map(p => `<tr>
               <td>$${p.amount}</td>
               <td>${p.name}</td>
               <td>**** **** **** ${p.cardNumber.slice(-4)}</td>
               <td>${new Date(p.timestamp).toLocaleString()}</td>
               <td>${p.address}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>`;
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+      receiptsContainer.insertAdjacentHTML('beforeend', html);
     });
-
-    receiptsContainer.innerHTML = html || "<p>No payments recorded yet.</p>";
   }
 
-  // Page load logic: show payment form if ?purpose= in URL, else dashboard
-  window.addEventListener("DOMContentLoaded", () => {
-    refreshSavedLinks();
+  // Show approved message animation
+  function showApprovedMessage() {
+    approvedMessage.classList.add('show');
+    setTimeout(() => {
+      approvedMessage.classList.remove('show');
+    }, 3000);
+  }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const purpose = urlParams.get("purpose");
+  // Form submission
+  paymentForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const paymentData = {
+      purpose: formPurposeInput.value.trim(),
+      amount: parseFloat(paymentForm.amount.value).toFixed(2),
+      cardNumber: paymentForm.cardNumber.value.trim(),
+      cvc: paymentForm.cvc.value.trim(),
+      expDate: paymentForm.expDate.value.trim(),
+      name: paymentForm.name.value.trim(),
+      address: paymentForm.address.value.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    // Validate required fields and amount
+    if (!paymentData.purpose || !paymentData.amount || paymentData.amount <= 0 ||
+        !paymentData.cardNumber || !paymentData.cvc || !paymentData.expDate ||
+        !paymentData.name || !paymentData.address) {
+      alert('Please fill all required fields correctly.');
+      return;
+    }
+
+    // (Add card type validation if needed)
+
+    savePayment(paymentData);
+    paymentForm.reset();
+    showApprovedMessage();
+  });
+
+  // On load, parse URL param and show payment form if purpose present
+  window.addEventListener('DOMContentLoaded', () => {
+    refreshLinksList();
+    const purpose = urlParam('purpose');
     if (purpose) {
-      dashboard.classList.add("hidden");
-      receiptsPage.classList.add("hidden");
-      paymentFormPage.classList.remove("hidden");
-      displayPurposeSpan.textContent = decodePurpose(purpose);
+      setActiveViewToPayment(decodePurpose(purpose));
     } else {
-      showDashboard();
+      setActiveNav('dashboard');
     }
   });
-</script>
 
-<!-- Approved message popup -->
-<div id="approvedMessage" role="alert" aria-live="assertive">
-  <svg viewBox="0 0 24 24">
-    <path d="M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4z"/>
-  </svg>
-  Payment Approved
-</div>
+  function setActiveViewToPayment(purpose) {
+    navDashboard.classList.remove('active');
+    navReceipts.classList.remove('active');
+    dashboard.classList.add('hidden');
+    receiptsPage.classList.add('hidden');
+    paymentFormPage.classList.remove('hidden');
+    formPurposeInput.value = purpose;
+  }
+
+  // Navigation from nav buttons
+function setActiveNav(page) {
+  if (page === 'dashboard') {
+    navDashboard.classList.remove('hidden');
+    navReceipts.classList.remove('hidden');
+    navDashboard.classList.add('active');
+    navReceipts.classList.remove('active');
+    dashboard.classList.remove('hidden');
+    paymentFormPage.classList.add('hidden');
+    receiptsPage.classList.add('hidden');
+  } else if (page === 'receipts') {
+    navDashboard.classList.remove('hidden');
+    navReceipts.classList.remove('hidden');
+    navDashboard.classList.remove('active');
+    navReceipts.classList.add('active');
+    dashboard.classList.add('hidden');
+    paymentFormPage.classList.add('hidden');
+    receiptsPage.classList.remove('hidden');
+    loadReceipts();
+  } else if (page === 'payment') {
+    navDashboard.classList.add('hidden');
+    navReceipts.classList.add('hidden');
+    dashboard.classList.add('hidden');
+    paymentFormPage.classList.remove('hidden');
+    receiptsPage.classList.add('hidden');
+  }
+}
+
+// Example usage:
+// When your URL has ?purpose=... call:
+setActiveNav('payment');
+
+
+  navDashboard.addEventListener('click', () => setActiveNav('dashboard'));
+  navReceipts.addEventListener('click', () => setActiveNav('receipts'));
+</script>
 
 </body>
 </html>
